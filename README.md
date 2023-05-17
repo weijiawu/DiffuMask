@@ -23,7 +23,13 @@ pip install git+https://github.com/lucasb-eyer/pydensecrf.git
 pip install -r requirements.txt
 ```
 ```
-If there is an error: bug for cannot import name 'autocast' from 'torch', please refer to the website:  https://github.com/pesser/stable-diffusion/issues/14
+If there is an error: 
+
+bug for cannot import name 'autocast' from 'torch', 
+
+please refer to the website:  
+
+https://github.com/pesser/stable-diffusion/issues/14
 ```
 
 ### 1. Data and mask generation
