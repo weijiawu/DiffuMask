@@ -17,7 +17,7 @@ conda activate DiffuMask
 ```
 
 ```
- install pydensecrf https://github.com/lucasb-eyer/pydensecrf
+pip install pydensecrf https://github.com/lucasb-eyer/pydensecrf
 pip install git+https://github.com/lucasb-eyer/pydensecrf.git
 
 pip install -r requirements.txt
