@@ -122,13 +122,10 @@ if __name__ == '__main__':
         dheight = int(np.ceil(img.shape[2]/8))
         dwidth = int(np.ceil(img.shape[3]/8))
         
-#         print()
         cam = np.load(os.path.join(args.cam_dir, name + '.npy'),allow_pickle=True).item()
         cam_copy = np.array(list(cam.values()))
         cam_copy_idx = cam_copy.sum(axis=1).sum(axis=1)
-#         print(cam_copy_idx)
         idx_ = np.nonzero(cam_copy_idx)[0][0]
-#         print(idx_)
         cam_copy = cam_copy[idx_]
         
         cam_full_arr = np.zeros((21, orig_shape[2], orig_shape[3]), np.float32)

@@ -19,9 +19,6 @@ from clip_retrieval.clip_client import ClipClient, Modality
 from tqdm import tqdm
 
 
-
-
-MY_TOKEN = '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'
 LOW_RESOURCE = False 
 NUM_DIFFUSION_STEPS = 50
 GUIDANCE_SCALE = 7.5
@@ -321,7 +318,7 @@ def mask_image(image, mask_2d, rgb=None, valid = False):
 
 def get_findContours(mask):
     mask_instance = (mask>0.5 * 1).astype(np.uint8) 
-    ontours, hierarchy = cv2.findContours(mask_instance.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)  #cv2.RETR_EXTERNAL 定义只检测外围轮廓
+    ontours, hierarchy = cv2.findContours(mask_instance.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
     
     min_area = 0
     polygon_ins = []
@@ -330,7 +327,6 @@ def get_findContours(mask):
     image_h, image_w = mask.shape[0:2]
     gt_kernel = np.zeros((image_h,image_w), dtype='uint8')
     for cnt in ontours:
-        # 外接矩形框，没有方向角
         x_ins_t, y_ins_t, w_ins_t, h_ins_t = cv2.boundingRect(cnt)
 
         if w_ins_t*h_ins_t<250:
@@ -499,14 +495,14 @@ def sub_processor(pid , args):
     torch.cuda.set_device(pid)
     text = 'processor %d' % pid
     print(text)
-    
-    MY_TOKEN = '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'
+
     LOW_RESOURCE = False 
     NUM_DIFFUSION_STEPS = 50
     GUIDANCE_SCALE = 7.5
     MAX_NUM_WORDS = 77
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    ldm_stable = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", use_auth_token=MY_TOKEN).to(device)
+#     ldm_stable = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4")
+    ldm_stable = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", use_auth_token=args.MY_TOKEN).to(device)
     tokenizer = ldm_stable.tokenizer
 
     number_per_thread_num = int(int(args.image_number)/int(args.thread_num))
@@ -645,8 +641,6 @@ def sub_processor(pid , args):
         
     elif args.classes == "bottle":
         bottle_sub_classes = ["Photo of a bottle"]
-#         bottle_sub_classes = car_sub_classes + more_prompt_for_car
-#         bottle_sub_classes = clipretrieval(bottle_sub_classes,["bottle"])
 
     elif args.classes == "car":
         car_sub_classes = ["Photo of a {} car".format(name) for name in car_sub_classes]
@@ -755,6 +749,8 @@ if __name__ == '__main__':
     parser.add_argument("--thread_num", default=8, type=int)
     parser.add_argument("--output", default=None, type=str)
     parser.add_argument("--image_number", default=None, type=str)
+    parser.add_argument("--MY_TOKEN", default=None, type=str)
+    
     args = parser.parse_args()
     
     args.output = os.path.join(args.output, "VOC_Multi_Attention_{}_sub_{}_NoClipRetrieval_sample".format(args.classes,args.image_number))

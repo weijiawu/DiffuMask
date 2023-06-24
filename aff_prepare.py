@@ -70,7 +70,7 @@ if __name__ == '__main__':
             os.makedirs(args.out_crf)
     
 #     args.infer_list = "./Diffusion/train_image"
-    name_list = [i for i in os.listdir(args.infer_list) if "jpg" in i][:4000]
+    name_list = [i for i in os.listdir(args.infer_list) if "jpg" in i]
     print(len(name_list))
     
 #     df = pd.read_csv(args.infer_list, names=['filename'])

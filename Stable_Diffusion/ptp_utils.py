@@ -37,19 +37,7 @@ def text_under_image(image: np.ndarray, text: str, text_color: Tuple[int, int, i
 
 
 def view_images(images, num_rows=1, offset_ratio=0.02,out_put="./test_1.jpg"):
-#     images_one = images[0]
-#     images_two = images[1]
-#     diff_mean = images_two-images_one
-# #     diff_mean = diff_img.mean(dim=1)
-#     diff_normed = (diff_mean - diff_mean.min())/(diff_mean - diff_mean.min()).max()
-#     diff_bin=(diff_normed>0.5)
-# #     print(diff_bin.shape)
-#     diff_bin = diff_bin
-    
-#     cv2.imwrite(out_put.replace("image","test1"),diff_bin[:,:,0]*255)
-#     cv2.imwrite(out_put.replace("image","test2"),diff_bin[:,:,1]*255)
-#     cv2.imwrite(out_put.replace("image","test3"),diff_bin[:,:,2]*255)
-    
+
     if type(images) is list:
         num_empty = len(images) % num_rows
     elif images.ndim == 4:
@@ -86,7 +74,6 @@ def diffusion_step(model, controller, latents, context, t, guidance_scale, low_r
         noise_prediction_text = model.unet(latents, t, encoder_hidden_states=context[1])["sample"]
     else:
         latents_input = torch.cat([latents] * 2)
-        # 
         noise_pred = model.unet(latents_input, t, encoder_hidden_states=context)["sample"]
         noise_pred_uncond, noise_prediction_text = noise_pred.chunk(2)
     noise_pred = noise_pred_uncond + guidance_scale * (noise_prediction_text - noise_pred_uncond)
@@ -183,7 +170,7 @@ def text2image_ldm_stable(
     
     # set timesteps
     extra_set_kwargs = {"offset": 1}
-    model.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
+    model.scheduler.set_timesteps(num_inference_steps)
     for t in tqdm(model.scheduler.timesteps):
         latents = diffusion_step(model, controller, latents, context, t, guidance_scale, low_resource)
     
@@ -194,8 +181,32 @@ def text2image_ldm_stable(
 
 def register_attention_control(model, controller):
     def ca_forward(self, place_in_unet):
+        to_out = self.to_out
+        if type(to_out) is torch.nn.modules.container.ModuleList:
+            to_out = self.to_out[0]
+        else:
+            to_out = self.to_out
+        
+        def reshape_heads_to_batch_dim(self, tensor):
+            batch_size, seq_len, dim = tensor.shape
+            head_size = self.heads
+            tensor = tensor.reshape(batch_size, seq_len, head_size, dim // head_size)
+            tensor = tensor.permute(0, 2, 1, 3).reshape(batch_size * head_size, seq_len, dim // head_size)
+            return tensor
 
-        def forward(x, context=None, mask=None):
+        def reshape_batch_dim_to_heads(self, tensor):
+            batch_size, seq_len, dim = tensor.shape
+            head_size = self.heads
+            tensor = tensor.reshape(batch_size // head_size, head_size, seq_len, dim)
+            tensor = tensor.permute(0, 2, 1, 3).reshape(batch_size // head_size, seq_len, dim * head_size)
+            return tensor
+
+        # def forward(x, context=None, mask=None):
+        def forward(hidden_states, encoder_hidden_states=None, attention_mask=None, **cross_attention_kwargs):
+            x = hidden_states
+            context = encoder_hidden_states
+            mask = attention_mask
+            
             batch_size, sequence_length, dim = x.shape
             h = self.heads
             q = self.to_q(x)
@@ -203,9 +214,9 @@ def register_attention_control(model, controller):
             context = context if is_cross else x
             k = self.to_k(context)
             v = self.to_v(context)
-            q = self.reshape_heads_to_batch_dim(q)
-            k = self.reshape_heads_to_batch_dim(k)
-            v = self.reshape_heads_to_batch_dim(v)
+            q = reshape_heads_to_batch_dim(self,q)
+            k = reshape_heads_to_batch_dim(self,k)
+            v = reshape_heads_to_batch_dim(self,v)
 
             sim = torch.einsum("b i d, b j d -> b i j", q, k) * self.scale
 
@@ -217,34 +228,110 @@ def register_attention_control(model, controller):
 
             # attention, what we cannot get enough of
             attn = sim.softmax(dim=-1)
-            
             attn = controller(attn, is_cross, place_in_unet)
             out = torch.einsum("b i j, b j d -> b i d", attn, v)
-            out = self.reshape_batch_dim_to_heads(out)
-            return self.to_out(out)
+            out = reshape_batch_dim_to_heads(self,out)
+            return to_out(out)
 
         return forward
 
-    def register_recr(net_, count, place_in_unet):
-        if net_.__class__.__name__ == 'CrossAttention':
+    class DummyController:
+
+        def __call__(self, *args):
+            return args[0]
+
+        def __init__(self):
+            self.num_att_layers = 0
+
+    if controller is None:
+        controller = DummyController()
+
+    def register_recr(net_, count, place_in_unet, module_name=None):
+        # if net_.__class__.__name__ == 'CrossAttention':
+        #     net_.forward = ca_forward(net_, place_in_unet)
+        #     return count + 1
+        if module_name in ["attn1", "attn2"]:
             net_.forward = ca_forward(net_, place_in_unet)
             return count + 1
         elif hasattr(net_, 'children'):
-            for net__ in net_.children():
-                count = register_recr(net__, count, place_in_unet)
+            for k,net__ in net_.named_children():
+                count = register_recr(net__, count, place_in_unet, module_name = k)
         return count
 
     cross_att_count = 0
     sub_nets = model.unet.named_children()
     for net in sub_nets:
-#         print(net)
         if "down" in net[0]:
             cross_att_count += register_recr(net[1], 0, "down")
         elif "up" in net[0]:
             cross_att_count += register_recr(net[1], 0, "up")
         elif "mid" in net[0]:
             cross_att_count += register_recr(net[1], 0, "mid")
+
     controller.num_att_layers = cross_att_count
+    
+
+# def register_attention_control(model, controller):
+    
+    
+#     def ca_forward(self, place_in_unet):
+        
+# #         def forward(hidden_states, encoder_hidden_states=None, attention_mask=None, **cross_attention_kwargs):
+# #             x = hidden_states
+# #             context = encoder_hidden_states
+# #             mask = attention_mask
+            
+#         def forward(x, context=None, mask=None):
+#             batch_size, sequence_length, dim = x.shape
+#             h = self.heads
+#             q = self.to_q(x)
+#             is_cross = context is not None
+#             context = context if is_cross else x
+#             k = self.to_k(context)
+#             v = self.to_v(context)
+#             q = self.reshape_heads_to_batch_dim(q)
+#             k = self.reshape_heads_to_batch_dim(k)
+#             v = self.reshape_heads_to_batch_dim(v)
+
+#             sim = torch.einsum("b i d, b j d -> b i j", q, k) * self.scale
+
+#             if mask is not None:
+#                 mask = mask.reshape(batch_size, -1)
+#                 max_neg_value = -torch.finfo(sim.dtype).max
+#                 mask = mask[:, None, :].repeat(h, 1, 1)
+#                 sim.masked_fill_(~mask, max_neg_value)
+
+#             # attention, what we cannot get enough of
+#             attn = sim.softmax(dim=-1)
+            
+#             attn = controller(attn, is_cross, place_in_unet)
+#             out = torch.einsum("b i j, b j d -> b i d", attn, v)
+#             out = self.reshape_batch_dim_to_heads(out)
+#             out = self.to_out(out)
+#             return out
+
+#         return forward
+
+#     def register_recr(net_, count, place_in_unet):
+#         if net_.__class__.__name__ == 'CrossAttention':
+#             net_.forward = ca_forward(net_, place_in_unet)
+#             return count + 1
+#         elif hasattr(net_, 'children'):
+#             for net__ in net_.children():
+#                 count = register_recr(net__, count, place_in_unet)
+#         return count
+
+#     cross_att_count = 0
+#     sub_nets = model.unet.named_children()
+#     for net in sub_nets:
+# #         print(net)
+#         if "down" in net[0]:
+#             cross_att_count += register_recr(net[1], 0, "down")
+#         elif "up" in net[0]:
+#             cross_att_count += register_recr(net[1], 0, "up")
+#         elif "mid" in net[0]:
+#             cross_att_count += register_recr(net[1], 0, "mid")
+#     controller.num_att_layers = cross_att_count
 
     
 def get_word_inds(text: str, word_place: int, tokenizer):
@@ -309,7 +396,6 @@ def latent2diff(vae, latents):
 #     avgPool = nn.AvgPool2d(2)  #4*4的窗口，步长为4的平均池化
 #     image_1 = avgPool(image)
     
-    
     diff_image = image[-1] - image[0]
     diff_mean = diff_image.abs().mean(dim=0)
     
@@ -335,7 +421,6 @@ def text2image_ldm_diff(
         latent: Optional[torch.FloatTensor] = None,
         low_resource: bool = False,
 ):
-    # 在unet中进行CA的位置挂载钩子函数，使用controller改变CA的forward函数行为
     register_attention_control(model, controller)
     height = width = 512
     batch_size = len(prompt)
@@ -357,15 +442,15 @@ def text2image_ldm_diff(
     context = [uncond_embeddings, text_embeddings]
     if not low_resource:
         context = torch.cat(context)
-    # 使用固定的随机数种子初始化隐变量
+
     latent, latents = init_latent(latent, model, height, width, generator, batch_size)
 
-    # 设置解码过程中的时间步
+
     # set timesteps
     extra_set_kwargs = {"offset": 1}
     model.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
 
-    # 逆扩散过程
+
     for t in tqdm(model.scheduler.timesteps):
         latents = diffusion_step(model, controller, latents, context, t, guidance_scale, low_resource)
 
@@ -384,7 +469,7 @@ def text2image_ldm_difflatent(
         latent: Optional[torch.FloatTensor] = None,
         low_resource: bool = False,
 ):
-    # 在unet中进行CA的位置挂载钩子函数，使用controller改变CA的forward函数行为
+
     register_attention_control(model, controller)
     height = width = 512
     batch_size = len(prompt)
@@ -408,8 +493,7 @@ def text2image_ldm_difflatent(
         text_embeddings = text_embeddings[0][None]
     #     delta = torch.randn(text_embeddings.shape[-1])
         delta = torch.ones(text_embeddings.shape[-1]) 
-        # delta[50:100] = 1
-        # delta[100:150] = 1
+
         delta = delta[None].to(text_embeddings)
         noise_text_embeddings = copy.deepcopy(text_embeddings)
         # 1 77 768 noise_text_embeddings
@@ -422,15 +506,13 @@ def text2image_ldm_difflatent(
         
     if not low_resource:
         context = torch.cat(context)
-    # 使用固定的随机数种子初始化隐变量
+
     latent, latents = init_latent(latent, model, height, width, generator, batch_size)
 
-    # 设置解码过程中的时间步
     # set timesteps
     extra_set_kwargs = {"offset": 1}
     model.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
 
-    # 逆扩散过程
     for t in tqdm(model.scheduler.timesteps):
         latents = diffusion_step(model, controller, latents, context, t, guidance_scale, low_resource)
 
