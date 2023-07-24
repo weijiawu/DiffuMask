@@ -1,4 +1,4 @@
-# DiffuMask
+# DiffuMask (ICCV 2023)
 DiffuMask: Synthesizing Images with Pixel-level Annotations for Semantic Segmentation Using Diffusion Models
 
 <p align="center">
