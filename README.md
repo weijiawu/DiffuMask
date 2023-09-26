@@ -70,3 +70,14 @@ To start training the model, please note the following points:
 
 ### 4. Training Mask2former with clear data
 
+
+## Citation
+
+```
+@article{wu2023diffumask,
+  title={Diffumask: Synthesizing images with pixel-level annotations for semantic segmentation using diffusion models},
+  author={Wu, Weijia and Zhao, Yuzhong and Shou, Mike Zheng and Zhou, Hong and Shen, Chunhua},
+  journal={Proc. Int. Conf. Computer Vision (ICCV 2023)},
+  year={2023}
+}
+```
