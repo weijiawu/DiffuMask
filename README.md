@@ -71,7 +71,9 @@ To start training the model, please note the following points:
 ### 4. Training Mask2former with clear data
 
 
-We are providing synthetic data for the "dog" category here with [Baidu Drive](https://pan.baidu.com/s/1rtr610DYrjgepDKBrMrmkQ) (password: 53rb). Feel free to use it.
+We are providing synthetic data for the "dog" category here with [Baidu Drive](https://pan.baidu.com/s/1rtr610DYrjgepDKBrMrmkQ) (password: 53rb) and "Bird" category  with [Baidu Drive](https://pan.baidu.com/s/1REbkL0Q5go9zzLzr36cHyg) (password: 8v7q). Feel free to use it.
+
+
 
 ## Citation
 
