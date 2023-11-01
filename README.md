@@ -39,6 +39,8 @@ sh ./script/DiffusionGeneration/VOC_data_generation.sh
 ```
 
 ### 2. Refine Mask with AffinityNet (Coarse Mask)
+
+We also offer the AffinityNet weight for the 'dog' class on [Google Drive](https://drive.google.com/file/d/1rZJRUl-bCDNTFwGbCg6EO8GrtXcjguiJ/view?usp=sharing).
 ```
 # prepare training data for affinity net
 sh ./script/prepare_aff_data.sh
@@ -54,7 +56,7 @@ sh ./script/infer_aff.sh
 sh ./script/curve_threshold.sh
 ```
 
-### 3. Noise Learning (Cross Validation)
+### 3. Noise Learning (Cross Validation) 
 
 At this stage, it is necessary to train Mask2Former using cross-validation to filter out noisy data. Before training Mask2Former, data augmentation needs to be performed on the dataset.
 ```
