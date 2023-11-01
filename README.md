@@ -40,7 +40,7 @@ sh ./script/DiffusionGeneration/VOC_data_generation.sh
 
 ### 2. Refine Mask with AffinityNet (Coarse Mask)
 
-We also offer the AffinityNet weight for the 'dog' class on [Google Drive](https://drive.google.com/file/d/1rZJRUl-bCDNTFwGbCg6EO8GrtXcjguiJ/view?usp=sharing).
+We also offer the AffinityNet weight for the 'dog' class on [Google Drive](https://drive.google.com/file/d/1rZJRUl-bCDNTFwGbCg6EO8GrtXcjguiJ/view?usp=sharing) and 'bird' class on [Google drive](https://drive.google.com/file/d/1622_4opTZko0COXuWN_RZ8ZGhioyVeqo/view?usp=sharing).
 ```
 # prepare training data for affinity net
 sh ./script/prepare_aff_data.sh
